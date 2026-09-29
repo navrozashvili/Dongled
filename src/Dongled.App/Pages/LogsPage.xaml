@@ -18,11 +18,13 @@
         <StackPanel Grid.Row="1" Spacing="8">
             <InfoBar
                 IsOpen="{x:Bind ViewModel.HasProblem, Mode=OneWay}"
+                Visibility="{x:Bind ViewModel.HasProblem, Mode=OneWay}"
                 IsClosable="False"
                 Severity="Error"
                 Message="{x:Bind ViewModel.Problem, Mode=OneWay}" />
             <InfoBar
                 IsOpen="{x:Bind ViewModel.HasNotice, Mode=OneWay}"
+                Visibility="{x:Bind ViewModel.HasNotice, Mode=OneWay}"
                 IsClosable="True"
                 Severity="Success"
                 Message="{x:Bind ViewModel.Notice, Mode=OneWay}" />

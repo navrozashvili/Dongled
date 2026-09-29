@@ -16,6 +16,7 @@
 
             <InfoBar
                 IsOpen="{x:Bind vm:SettingsViewModel.IsRedirected}"
+                Visibility="{x:Bind vm:SettingsViewModel.IsRedirected}"
                 IsClosable="False"
                 Severity="Warning"
                 Title="Files are redirected"
@@ -23,6 +24,7 @@
 
             <InfoBar
                 IsOpen="{x:Bind ViewModel.HasProblem, Mode=OneWay}"
+                Visibility="{x:Bind ViewModel.HasProblem, Mode=OneWay}"
                 IsClosable="False"
                 Severity="Error"
                 Message="{x:Bind ViewModel.Problem, Mode=OneWay}" />

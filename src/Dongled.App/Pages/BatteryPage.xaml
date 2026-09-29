@@ -12,6 +12,7 @@
 
             <InfoBar
                 IsOpen="{x:Bind ViewModel.HasProblem, Mode=OneWay}"
+                Visibility="{x:Bind ViewModel.HasProblem, Mode=OneWay}"
                 IsClosable="False"
                 Severity="Error"
                 Message="{x:Bind ViewModel.Problem, Mode=OneWay}" />

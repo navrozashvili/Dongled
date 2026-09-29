@@ -26,6 +26,7 @@
         <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Spacing="8">
             <InfoBar
                 IsOpen="{x:Bind ViewModel.HasProblem, Mode=OneWay}"
+                Visibility="{x:Bind ViewModel.HasProblem, Mode=OneWay}"
                 IsClosable="False"
                 Severity="Error"
                 Message="{x:Bind ViewModel.Problem, Mode=OneWay}" />
@@ -93,6 +94,7 @@
 
                 <InfoBar
                     IsOpen="{x:Bind ViewModel.HasValidation, Mode=OneWay}"
+                    Visibility="{x:Bind ViewModel.HasValidation, Mode=OneWay}"
                     IsClosable="False"
                     Severity="Warning"
                     Message="{x:Bind ViewModel.Validation, Mode=OneWay}" />
