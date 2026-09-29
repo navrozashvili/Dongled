@@ -38,6 +38,20 @@
                     TextWrapping="Wrap"
                     Style="{StaticResource CaptionTextBlockStyle}"
                     Text="Starts for you only, when you sign in. There is no option to start for every user on this machine, and the app never asks for administrator." />
+                <InfoBar
+                    Margin="0,8,0,0"
+                    IsOpen="{x:Bind ViewModel.StartsAnotherCopy, Mode=OneWay}"
+                    Visibility="{x:Bind ViewModel.StartsAnotherCopy, Mode=OneWay}"
+                    IsClosable="False"
+                    Severity="Warning"
+                    Title="{x:Bind ViewModel.OtherCopyNotice, Mode=OneWay}"
+                    Message="{x:Bind ViewModel.OtherCopyPath, Mode=OneWay}">
+                    <InfoBar.ActionButton>
+                        <Button
+                            Content="Use this copy"
+                            Command="{x:Bind ViewModel.UseThisCopyCommand}" />
+                    </InfoBar.ActionButton>
+                </InfoBar>
             </StackPanel>
 
             <StackPanel Spacing="4">

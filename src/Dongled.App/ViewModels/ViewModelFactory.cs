@@ -1,5 +1,6 @@
 using Dongled.App.Presentation;
 using Dongled.App.Services;
+using Dongled.App.Startup;
 using Dongled.Core.Audio;
 using Dongled.Core.Configuration;
 using Dongled.Core.Engine;
@@ -28,6 +29,7 @@ internal sealed class ViewModelFactory
     private readonly Action<AppTheme> _applyTheme;
     private readonly Action _notifyTrayOrderChanged;
     private readonly IUpdateService _updates;
+    private readonly IStartupRegistration _startup;
 
     /// <param name="configStore">Configuration.</param>
     /// <param name="endpoints">Windows audio.</param>
@@ -42,6 +44,7 @@ internal sealed class ViewModelFactory
     /// <param name="applyTheme">Applies a theme to the live window.</param>
     /// <param name="notifyTrayOrderChanged">Redraws the tray icon after the battery order changes.</param>
     /// <param name="updates">Checks for and installs updates.</param>
+    /// <param name="startup">The start-with-Windows entry.</param>
     public ViewModelFactory(
         IConfigStore configStore,
         IAudioEndpointService endpoints,
@@ -55,7 +58,8 @@ internal sealed class ViewModelFactory
         Action requestRestart,
         Action<AppTheme> applyTheme,
         Action notifyTrayOrderChanged,
-        IUpdateService updates)
+        IUpdateService updates,
+        IStartupRegistration startup)
     {
         ArgumentNullException.ThrowIfNull(configStore);
         ArgumentNullException.ThrowIfNull(endpoints);
@@ -70,6 +74,7 @@ internal sealed class ViewModelFactory
         ArgumentNullException.ThrowIfNull(applyTheme);
         ArgumentNullException.ThrowIfNull(notifyTrayOrderChanged);
         ArgumentNullException.ThrowIfNull(updates);
+        ArgumentNullException.ThrowIfNull(startup);
 
         _configStore = configStore;
         _endpoints = endpoints;
@@ -84,6 +89,7 @@ internal sealed class ViewModelFactory
         _applyTheme = applyTheme;
         _notifyTrayOrderChanged = notifyTrayOrderChanged;
         _updates = updates;
+        _startup = startup;
     }
 
     /// <param name="dialogs">Dialogs shown over the page asking for the view model.</param>
@@ -105,7 +111,7 @@ internal sealed class ViewModelFactory
 
     /// <param name="dialogs">Dialogs shown over the page asking for the view model.</param>
     public SettingsViewModel CreateSettings(IDialogService dialogs) =>
-        new(_configStore, _engine, _plugins, _applyTheme, _updates, CreateUpdateFlow(dialogs), _dispatcher);
+        new(_configStore, _engine, _plugins, _applyTheme, _updates, CreateUpdateFlow(dialogs), _dispatcher, _startup);
 
     private UpdateFlow CreateUpdateFlow(IDialogService dialogs) =>
         new(_updates, dialogs, _requestRestart);

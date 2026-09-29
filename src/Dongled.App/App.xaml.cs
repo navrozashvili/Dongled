@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Dongled.App.Presentation;
 using Dongled.App.Services;
+using Dongled.App.Startup;
 using Dongled.App.Tray;
 using Dongled.App.ViewModels;
 using Dongled.Core;
@@ -47,6 +48,7 @@ public partial class App : Application
     private readonly SingleInstance? _instance;
     private readonly LogRingBuffer _logBuffer = new();
     private readonly CancellationTokenSource _shutdown = new();
+    private readonly StartupRegistration _startup = StartupRegistration.ForThisProcess();
 
     private MainWindow? _window;
     private IHost? _host;
@@ -96,6 +98,8 @@ public partial class App : Application
         // Whatever the last update moved aside. In the background and with retries, because the copy
         // it replaced may still be finishing its exit and holding some of those files open.
         _ = Task.Run(() => CleanUpAfterUpdateAsync(logger));
+
+        StartupEntryRepair.Apply(_startup, services.GetRequiredService<BuildInfo>().IsOfficial, logger);
 
         _window = CreateWindow(services);
 
@@ -209,7 +213,8 @@ public partial class App : Application
             RequestRestart,
             ApplyTheme,
             shell.Refresh,
-            updates);
+            updates,
+            _startup);
 
         var window = new MainWindow(
             shell,

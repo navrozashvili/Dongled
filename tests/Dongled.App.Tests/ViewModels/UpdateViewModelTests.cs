@@ -21,7 +21,7 @@ public sealed class UpdateViewModelTests
         new(new FakeAudioEndpointService(), new FakeSwitchingEngine(), _store, new LogRingBuffer(), _dispatcher, updates ?? _updates, Flow());
 
     private SettingsViewModel CreateSettings(FakeUpdateService? updates = null) =>
-        new(_store, new FakeSwitchingEngine(), new FakePluginRuntime(), _ => { }, updates ?? _updates, Flow(), _dispatcher);
+        new(_store, new FakeSwitchingEngine(), new FakePluginRuntime(), _ => { }, updates ?? _updates, Flow(), _dispatcher, new FakeStartupRegistration());
 
     [Fact]
     public void The_banner_shows_a_newer_release()

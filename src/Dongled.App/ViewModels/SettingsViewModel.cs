@@ -36,6 +36,7 @@ internal sealed partial class SettingsViewModel : ObservableObject, IDisposable
     private readonly IUpdateService _updates;
     private readonly UpdateFlow _updateFlow;
     private readonly IUiDispatcher _dispatcher;
+    private readonly IStartupRegistration _startup;
     private readonly AppConfig _config;
 
     private bool _startWithWindows;
@@ -56,6 +57,7 @@ internal sealed partial class SettingsViewModel : ObservableObject, IDisposable
     /// <param name="updates">Checks for and installs updates.</param>
     /// <param name="updateFlow">What the Update button runs.</param>
     /// <param name="dispatcher">The UI thread, which update changes are marshalled to.</param>
+    /// <param name="startup">The start-with-Windows entry.</param>
     public SettingsViewModel(
         IConfigStore configStore,
         ISwitchingEngine engine,
@@ -63,7 +65,8 @@ internal sealed partial class SettingsViewModel : ObservableObject, IDisposable
         Action<AppTheme> applyTheme,
         IUpdateService updates,
         UpdateFlow updateFlow,
-        IUiDispatcher dispatcher)
+        IUiDispatcher dispatcher,
+        IStartupRegistration startup)
     {
         ArgumentNullException.ThrowIfNull(configStore);
         ArgumentNullException.ThrowIfNull(engine);
@@ -72,6 +75,7 @@ internal sealed partial class SettingsViewModel : ObservableObject, IDisposable
         ArgumentNullException.ThrowIfNull(updates);
         ArgumentNullException.ThrowIfNull(updateFlow);
         ArgumentNullException.ThrowIfNull(dispatcher);
+        ArgumentNullException.ThrowIfNull(startup);
 
         _configStore = configStore;
         _engine = engine;
@@ -80,6 +84,7 @@ internal sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _updates = updates;
         _updateFlow = updateFlow;
         _dispatcher = dispatcher;
+        _startup = startup;
 
         _config = configStore.Load();
 
@@ -94,13 +99,15 @@ internal sealed partial class SettingsViewModel : ObservableObject, IDisposable
         // Read from the registry rather than from configuration. The two can disagree — a user can
         // delete the Run value by hand — and the registry is the one that decides what actually
         // happens at logon, so it is the one shown.
-        _startWithWindows = StartupRegistration.IsEnabled();
-
+        RefreshStartup();
 
         _loaded = true;
     }
 
-    /// <summary>Whether to start when this user logs in. Per user; never machine wide.</summary>
+    /// <summary>
+    /// Whether to start this copy when this user logs in. Per user; never machine wide. Off when the
+    /// entry launches a different copy, because this one is not what starts.
+    /// </summary>
     public bool StartWithWindows
     {
         get => _startWithWindows;
@@ -111,26 +118,74 @@ internal sealed partial class SettingsViewModel : ObservableObject, IDisposable
                 return;
             }
 
-            try
-            {
-                StartupRegistration.SetEnabled(value);
-                Problem = string.Empty;
-            }
-            catch (Exception ex)
-            {
-                // Reverted so the checkbox reflects what is actually in the registry rather than what
-                // the user asked for and did not get.
-                _startWithWindows = !value;
-                OnPropertyChanged();
-                Problem = $"Start with Windows could not be changed: {ex.Message}";
-                return;
-            }
+            ApplyStartWithWindows(value);
+        }
+    }
 
-            // Kept in configuration too, so the value survives a profile that roams to a machine
-            // where the Run key was never written. The registry stays the authority on this machine.
-            _config.App.StartWithWindows = value;
+    /// <summary>
+    /// The copy the entry launches instead of this one, when it launches a different one: another
+    /// copy that exists, or one that has been moved or deleted. Empty otherwise.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StartsAnotherCopy))]
+    public partial string OtherCopyPath { get; private set; } = string.Empty;
+
+    /// <summary>Whether start-with-Windows launches something other than this copy.</summary>
+    public bool StartsAnotherCopy => OtherCopyPath.Length > 0;
+
+    /// <summary>What the page says about the other copy.</summary>
+    [ObservableProperty]
+    public partial string OtherCopyNotice { get; private set; } = string.Empty;
+
+    /// <summary>Point start-with-Windows at this copy instead of the one it launches now.</summary>
+    [RelayCommand]
+    private void UseThisCopy() => ApplyStartWithWindows(true);
+
+    private void ApplyStartWithWindows(bool value)
+    {
+        try
+        {
+            _startup.SetEnabled(value);
+            Problem = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            Problem = $"Start with Windows could not be changed: {ex.Message}";
+        }
+
+        // Re-read rather than trusting what was asked for, so the toggle and the notice show what is
+        // actually in the registry, including after a failed write.
+        RefreshStartup();
+
+        // Kept in configuration too, so the value survives a profile that roams to a machine where
+        // the Run key was never written. The registry stays the authority on this machine.
+        if (_config.App.StartWithWindows != _startWithWindows)
+        {
+            _config.App.StartWithWindows = _startWithWindows;
             Persist();
         }
+    }
+
+    private void RefreshStartup()
+    {
+        var entry = _startup.Read();
+
+        if (_startWithWindows != (entry.Target == StartupTarget.ThisCopy))
+        {
+            _startWithWindows = entry.Target == StartupTarget.ThisCopy;
+            OnPropertyChanged(nameof(StartWithWindows));
+        }
+
+        OtherCopyNotice = entry.Target switch
+        {
+            StartupTarget.OtherCopy => "Start with Windows launches a different copy of Dongled. Use this copy to start this one at sign-in instead.",
+            StartupTarget.MissingCopy => "Start with Windows points at a copy of Dongled that no longer exists, so nothing starts at sign-in.",
+            _ => string.Empty,
+        };
+
+        OtherCopyPath = entry.Target is StartupTarget.OtherCopy or StartupTarget.MissingCopy
+            ? entry.RecordedPath ?? string.Empty
+            : string.Empty;
     }
 
     /// <summary>
