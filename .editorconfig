@@ -1,0 +1,104 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+indent_style = space
+trim_trailing_whitespace = true
+
+[*.{yml,yaml,json,jsonc}]
+indent_size = 2
+
+[*.{xml,xaml,csproj,props,targets,slnx,config,manifest}]
+indent_size = 2
+
+[*.cs]
+indent_size = 4
+csharp_new_line_before_open_brace = all
+csharp_using_directive_placement = outside_namespace:warning
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_prefer_braces = true:silent
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+dotnet_style_qualification_for_field = false:warning
+dotnet_style_qualification_for_property = false:warning
+dotnet_style_qualification_for_method = false:warning
+dotnet_style_readonly_field = true:warning
+csharp_style_var_for_built_in_types = false:silent
+csharp_style_var_when_type_is_apparent = true:silent
+dotnet_style_prefer_conditional_expression_over_return = false:silent
+
+# Naming. These three rules are order sensitive: the first whose symbol group
+# matches wins, so the two narrow rules must precede the general one. Constants
+# and static readonly fields are PascalCase by universal C# convention, but they
+# are also fields, so without these they would be caught by the private-field
+# rule below and IDE1006 would demand names like _maximumStabilizationSeconds.
+dotnet_naming_style.pascal_case.capitalization = pascal_case
+
+dotnet_naming_rule.constants_are_pascal_case.severity = warning
+dotnet_naming_rule.constants_are_pascal_case.symbols = constant_fields
+dotnet_naming_rule.constants_are_pascal_case.style = pascal_case
+dotnet_naming_symbols.constant_fields.applicable_kinds = field
+dotnet_naming_symbols.constant_fields.applicable_accessibilities = *
+dotnet_naming_symbols.constant_fields.required_modifiers = const
+
+dotnet_naming_rule.static_readonly_are_pascal_case.severity = warning
+dotnet_naming_rule.static_readonly_are_pascal_case.symbols = static_readonly_fields
+dotnet_naming_rule.static_readonly_are_pascal_case.style = pascal_case
+dotnet_naming_symbols.static_readonly_fields.applicable_kinds = field
+dotnet_naming_symbols.static_readonly_fields.applicable_accessibilities = *
+dotnet_naming_symbols.static_readonly_fields.required_modifiers = static,readonly
+
+# Everything else private is _camelCase, matching the existing codebase.
+dotnet_naming_rule.private_fields_underscored.severity = warning
+dotnet_naming_rule.private_fields_underscored.symbols = private_fields
+dotnet_naming_rule.private_fields_underscored.style = underscore_prefixed
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_style.underscore_prefixed.required_prefix = _
+dotnet_naming_style.underscore_prefixed.capitalization = camel_case
+
+# --- Analyzer overrides required by AnalysisLevel=latest-all ---
+# CA1031 (do not catch general exception types): the trust pipeline and both
+# stores deliberately catch everything and fail closed or fall back to
+# defaults. This rule is directly contrary to the design.
+dotnet_diagnostic.CA1031.severity = none
+# CA1848 / CA1727 (LoggerMessage source-gen, PascalCase template names):
+# performance micro-guidance irrelevant to a tray app logging a few lines a minute.
+dotnet_diagnostic.CA1848.severity = none
+dotnet_diagnostic.CA1727.severity = none
+# CA2007 (ConfigureAwait): this is a Windows desktop app with no library
+# consumers; the default context behaviour is what we want.
+dotnet_diagnostic.CA2007.severity = none
+# CA1303 (localise literals): the app is English-only, no resource pipeline.
+dotnet_diagnostic.CA1303.severity = none
+# CA1716 / CA1724 (identifiers clashing with reserved words / namespaces):
+# fires on domain-correct names like "Rule" and "Presence".
+dotnet_diagnostic.CA1716.severity = none
+dotnet_diagnostic.CA1724.severity = none
+# CA1062 (validate public arguments): nullable reference types already
+# express and enforce this at compile time.
+dotnet_diagnostic.CA1062.severity = none
+
+[tests/**/*.cs]
+# Test classes are public-by-convention and use literals freely.
+dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.CA2201.severity = none
+# CA1002 / CA1721 / CA1030 are public-API design rules, and a test assembly
+# has no API. The fakes deliberately expose mutable List<T> so a test can
+# arrange and then read what happened; a fake needs both a Defaults property
+# and the GetDefaults method it is standing in for, because the interface
+# names the method and the test sets the value; and CA1030's advice to "make
+# it an event" is inapplicable to a method whose whole job is to raise one on
+# demand, which is how a test simulates a change Windows made.
+dotnet_diagnostic.CA1002.severity = none
+dotnet_diagnostic.CA1721.severity = none
+dotnet_diagnostic.CA1030.severity = none
+# CA1812 is syntactic: it looks for an object-creation expression naming the
+# type. A test assembly is full of fixture types that exist precisely so the
+# code under test constructs them by reflection, and one that exists so the
+# code under test *refuses* to construct it. Naming a type in a typeof() or
+# an InlineData does not satisfy the rule, and the "remove the code" advice
+# would delete the fixture the test is about.
+dotnet_diagnostic.CA1812.severity = none

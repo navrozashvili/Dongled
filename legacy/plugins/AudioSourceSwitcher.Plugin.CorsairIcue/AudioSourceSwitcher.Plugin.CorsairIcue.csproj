@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<AssemblyName>AudioSourceSwitcher.Plugin.CorsairIcue</AssemblyName>
+		<!-- Archived source from the earlier WinForms app. Exempt from the repository's build
+		     rules; it is not part of any build. See legacy/plugins/README.md. -->
+		<ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+		<TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+		<EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+		<!-- NuGet audit codes, suppressed for the legacy tree only: the accepted
+		     NetMQ 4.0.1.13 advisories would otherwise break its zero-warning build.
+		     CI's blocking vulnerability gate covers the new src/ and tests/ projects. -->
+		<NoWarn>$(NoWarn);NU1901;NU1902;NU1903;NU1904</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\AudioSourceSwitcher.Abstractions\AudioSourceSwitcher.Abstractions.csproj" />
+	</ItemGroup>
+
+	<!-- Convenience: copy the plugin DLL into the host app's Plugins directory on build -->
+	<Target Name="CopyPluginToHostPluginsDir" AfterTargets="Build">
+		<PropertyGroup>
+			<_HostPluginsDir>..\AudioSourceSwitcher\bin\$(Configuration)\net8.0-windows\Plugins\</_HostPluginsDir>
+		</PropertyGroup>
+		<MakeDir Directories="$(_HostPluginsDir)" />
+		<Copy SourceFiles="$(TargetPath)" DestinationFolder="$(_HostPluginsDir)" />
+	</Target>
+
+</Project>
+
+
+
+

@@ -1,0 +1,283 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer pull request push cancels the older run. A push to master never cancels one in progress,
+# because that run may be in the middle of publishing a release; a newer push waits instead, and
+# only the newest waiting push runs. Its release notes still cover the skipped commits, because
+# they are computed from the previous release's tag.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # The exact SDK global.json pins (rollForward is disabled there). A shipped plugin must
+      # build to the same bytes in every release in which its source is unchanged, and a
+      # different compiler is enough to break that.
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore (locked)
+        run: dotnet restore Dongled.slnx --locked-mode
+
+      # tools/InspectAssembly and tools/Dongled.ReleaseTool are deliberately outside the
+      # solution, so the solution-wide restore above never touches them. Without these steps
+      # their committed packages.lock.json files are never validated under --locked-mode.
+      - name: Restore tools/InspectAssembly (locked)
+        run: dotnet restore tools/InspectAssembly/InspectAssembly.csproj --locked-mode
+
+      - name: Restore tools/Dongled.ReleaseTool (locked)
+        run: dotnet restore tools/Dongled.ReleaseTool/Dongled.ReleaseTool.csproj --locked-mode
+
+      - name: Build
+        run: dotnet build Dongled.slnx -c Release --no-restore
+
+      # A build is enough for a ~100-line diagnostic tool; it has no tests.
+      - name: Build tools/InspectAssembly
+        run: dotnet build tools/InspectAssembly/InspectAssembly.csproj -c Release --no-restore
+
+      # Built here too, so a pull request that breaks the tool fails before master's release does.
+      - name: Build tools/Dongled.ReleaseTool
+        run: dotnet build tools/Dongled.ReleaseTool/Dongled.ReleaseTool.csproj -c Release --no-restore
+
+      - name: Test
+        run: dotnet test Dongled.slnx -c Release --no-build --verbosity normal
+
+      - name: Verify formatting
+        shell: pwsh
+        # Every project in the solution. tools/InspectAssembly is outside it
+        # and does not pass the check; legacy/plugins is unported source
+        # that no longer compiles at all. Neither is formatted here.
+        # An explicit $LASTEXITCODE check per project is required: pwsh does not
+        # abort on a native command's non-zero exit, so a bare sequence of
+        # commands would only ever surface the last one's result.
+        run: |
+          $projects = @(
+            'src/Dongled.Abstractions',
+            'src/Dongled.Core',
+            'src/Dongled.App',
+            'tests/Dongled.Core.Tests',
+            'tests/Dongled.App.Tests',
+            'tests/Dongled.Plugins.Tests',
+            'plugins/Dongled.Plugin.HyperXHid',
+            'plugins/Dongled.Plugin.Logitech',
+            'tools/Dongled.Plugin.Sample',
+            'tools/Dongled.ReleaseTool'
+          )
+          $failed = @()
+          foreach ($p in $projects) {
+            Write-Output "--- $p"
+            dotnet format $p --verify-no-changes --no-restore
+            if ($LASTEXITCODE -ne 0) { $failed += $p }
+          }
+          if ($failed.Count -gt 0) {
+            Write-Error "Format check failed: $($failed -join ', ')"
+            exit 1
+          }
+          Write-Output 'Formatting verified for all projects.'
+
+      - name: Fail on vulnerable packages
+        shell: pwsh
+        # Blocking gate over the whole solution plus
+        # tools/InspectAssembly, which is outside it. Nothing is exempt:
+        # the only advisories the repository ever accepted came through NetMQ in
+        # the legacy HyperX NGENUITY plugin, which is now unported source outside
+        # the solution and outside every build.
+        #
+        # Two things this has to get right. First, dotnet list exits 0 whether or
+        # not it finds advisories, so findings are detected by parsing the
+        # structured --format json output rather than matching an English phrase
+        # that a future SDK is free to reword. Second, the command's own exit code
+        # is checked: without that, a scanner failure (missing assets, NU1004, an
+        # unreachable NuGet source, a renamed flag) yields no findings and would
+        # pass as a clean scan.
+        #
+        # Note dotnet list takes one project or solution path, hence the loop, and
+        # each iteration's $LASTEXITCODE is checked because pwsh does not abort on
+        # a native command's non-zero exit.
+        run: |
+          $targets = @(
+            'Dongled.slnx',
+            'tools/InspectAssembly/InspectAssembly.csproj',
+            'tools/Dongled.ReleaseTool/Dongled.ReleaseTool.csproj'
+          )
+          $broken = @()
+          $findings = @()
+          foreach ($t in $targets) {
+            Write-Output "--- $t"
+            $raw = dotnet list $t package --vulnerable --include-transitive --format json --output-version 1 2>&1 | Out-String
+            if ($LASTEXITCODE -ne 0) {
+              Write-Output $raw
+              Write-Output "SCANNER FAILED for $t (exit $LASTEXITCODE)."
+              $broken += $t
+              continue
+            }
+            try {
+              $report = $raw | ConvertFrom-Json
+            } catch {
+              Write-Output $raw
+              Write-Output "SCANNER FAILED for $t (unparseable JSON): $($_.Exception.Message)"
+              $broken += $t
+              continue
+            }
+            foreach ($project in $report.projects | Where-Object { $_ }) {
+              foreach ($fw in $project.frameworks | Where-Object { $_ }) {
+                $packages = @($fw.topLevelPackages) + @($fw.transitivePackages) |
+                  Where-Object { $_ }
+                foreach ($pkg in $packages) {
+                  foreach ($v in $pkg.vulnerabilities | Where-Object { $_ }) {
+                    $findings += "$t [$($fw.framework)] $($pkg.id) $($pkg.resolvedVersion): $($v.severity) $($v.advisoryurl)"
+                  }
+                }
+              }
+            }
+          }
+          # A broken scanner is not a clean scan; fail loudly and distinctly.
+          if ($broken.Count -gt 0) {
+            Write-Error "Vulnerability scan could not be completed for: $($broken -join ', ')"
+            exit 1
+          }
+          if ($findings.Count -gt 0) {
+            $findings | ForEach-Object { Write-Output $_ }
+            Write-Error "Vulnerable packages found ($($findings.Count) finding(s))."
+            exit 1
+          }
+          Write-Output 'No vulnerable packages in the solution or the tools.'
+
+  # A full GitHub Release for every push to master that passed every gate above. The version is
+  # version.json's major.minor plus this workflow's run number, so it only ever goes up. (The run
+  # number also counts pull request runs, so versions skip numbers; that is harmless.)
+  release:
+    name: Release
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: windows-latest
+    timeout-minutes: 40
+    # The only job that can write: it creates the tag and the release.
+    permissions:
+      contents: write
+    # Never two releases at once: each compares its plugins against the latest release.
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_NUMBER: ${{ github.run_number }}
+
+    steps:
+      # Full history and tags: the release notes list the commits since the previous tag.
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Work out the version
+        id: version
+        shell: pwsh
+        run: |
+          $base = (Get-Content -Raw version.json | ConvertFrom-Json).version
+          if ($base -notmatch '^\d+\.\d+$') {
+            Write-Error "version.json must hold a major.minor version such as 1.0, not '$base'."
+            exit 1
+          }
+          $version = "$base.$env:RUN_NUMBER"
+          gh release view "v$version" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Error "Release v$version already exists. Re-running a workflow keeps its run number; push a new commit instead."
+            exit 1
+          }
+          Write-Output "Releasing $version."
+          "version=$version" >> $env:GITHUB_OUTPUT
+          # The runner ends a pwsh step with "exit $LASTEXITCODE", which here is gh's "not found".
+          exit 0
+
+      # The latest published release, and its plugins.json to compare this release's plugins with.
+      # No release at all means this is the first one, and every plugin is new.
+      - name: Find the previous release
+        id: previous
+        shell: pwsh
+        run: |
+          $tag = gh release list --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName // empty'
+          if ($LASTEXITCODE -ne 0) { Write-Error 'Could not list releases.'; exit 1 }
+          if (-not $tag) {
+            Write-Output 'No previous release: this is the first.'
+            exit 0
+          }
+          New-Item -ItemType Directory -Force previous | Out-Null
+          gh release download $tag --pattern plugins.json --dir previous
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "The previous release $tag has no plugins.json, so its plugins cannot be compared with this release's. Attach one to it, or delete that release if it was not made by this workflow."
+            exit 1
+          }
+          Write-Output "Previous release: $tag."
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "plugins=previous/plugins.json" >> $env:GITHUB_OUTPUT
+
+      - name: Build the release
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          PREVIOUS_PLUGINS: ${{ steps.previous.outputs.plugins }}
+        run: |
+          $arguments = @{ Version = $env:VERSION; Official = $true; OutputDirectory = 'artifacts/release' }
+          if ($env:PREVIOUS_PLUGINS) { $arguments.PreviousPluginsJson = $env:PREVIOUS_PLUGINS }
+          ./build/release.ps1 @arguments
+
+      - name: Write the release notes
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          PREVIOUS_TAG: ${{ steps.previous.outputs.tag }}
+          PREVIOUS_PLUGINS: ${{ steps.previous.outputs.plugins }}
+        run: |
+          $arguments = @{
+            Version = $env:VERSION
+            PluginsJson = 'artifacts/release/plugins.json'
+            OutFile = 'artifacts/notes.md'
+          }
+          if ($env:PREVIOUS_TAG) { $arguments.PreviousTag = $env:PREVIOUS_TAG }
+          if ($env:PREVIOUS_PLUGINS) { $arguments.PreviousPluginsJson = $env:PREVIOUS_PLUGINS }
+          ./build/release-notes.ps1 @arguments
+          Get-Content artifacts/notes.md
+
+      # gh uploads the assets to a draft and publishes it only once every upload has finished, so
+      # a failed upload never leaves a published release with missing files.
+      - name: Publish the release
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "v$env:VERSION" `
+            --target $env:GITHUB_SHA `
+            --title "Dongled $env:VERSION" `
+            --notes-file artifacts/notes.md `
+            --latest `
+            "artifacts/release/Dongled-$env:VERSION-win-x64.zip" `
+            "artifacts/release/Dongled-$env:VERSION-win-x64-framework-dependent.zip" `
+            artifacts/release/SHA256SUMS `
+            artifacts/release/plugins.json
+          if ($LASTEXITCODE -ne 0) { exit 1 }

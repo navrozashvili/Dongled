@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Dongled.App.Pages.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:Dongled.App.ViewModels">
+
+    <ScrollViewer>
+        <StackPanel
+            Margin="28"
+            Spacing="22"
+            MaxWidth="760"
+            HorizontalAlignment="Center">
+
+            <TextBlock Text="Settings" Style="{StaticResource TitleTextBlockStyle}" />
+
+            <InfoBar
+                IsOpen="{x:Bind vm:SettingsViewModel.IsRedirected}"
+                IsClosable="False"
+                Severity="Warning"
+                Title="Files are redirected"
+                Message="{x:Bind vm:SettingsViewModel.RedirectionNotice}" />
+
+            <InfoBar
+                IsOpen="{x:Bind ViewModel.HasProblem, Mode=OneWay}"
+                IsClosable="False"
+                Severity="Error"
+                Message="{x:Bind ViewModel.Problem, Mode=OneWay}" />
+
+            <StackPanel Spacing="4">
+                <ToggleSwitch
+                    Header="Start with Windows"
+                    IsOn="{x:Bind ViewModel.StartWithWindows, Mode=TwoWay}" />
+                <TextBlock
+                    Opacity="0.6"
+                    TextWrapping="Wrap"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Starts for you only, when you sign in. There is no option to start for every user on this machine, and the app never asks for administrator." />
+            </StackPanel>
+
+            <StackPanel Spacing="4">
+                <ToggleSwitch
+                    Header="Start in the notification area"
+                    IsOn="{x:Bind ViewModel.StartMinimized, Mode=TwoWay}" />
+                <TextBlock
+                    Opacity="0.6"
+                    TextWrapping="Wrap"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Takes effect the next time the app starts, and applies to every start, not only the one at sign-in. It then starts without opening this window, showing only the tray icon; rules still apply and batteries are still read. Click the icon to bring the window back — so does launching the app again, which is why running it a second time always shows the window." />
+            </StackPanel>
+
+            <StackPanel Spacing="4">
+                <ToggleSwitch
+                    Header="Apply rules at startup"
+                    IsOn="{x:Bind ViewModel.ApplyRulesOnStartup, Mode=TwoWay}" />
+                <TextBlock
+                    Opacity="0.6"
+                    TextWrapping="Wrap"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="When the app starts, check which sources are already connected and set the default device accordingly. A source nothing has reported on within five seconds is treated as not connected." />
+            </StackPanel>
+
+            <StackPanel Spacing="4">
+                <ComboBox
+                    Header="Theme"
+                    MinWidth="200"
+                    SelectedIndex="{x:Bind ViewModel.ThemeIndex, Mode=TwoWay}">
+                    <ComboBoxItem Content="Follow Windows" />
+                    <ComboBoxItem Content="Light" />
+                    <ComboBoxItem Content="Dark" />
+                </ComboBox>
+            </StackPanel>
+
+            <StackPanel Spacing="4">
+                <TextBlock Text="Files" Style="{StaticResource SubtitleTextBlockStyle}" />
+                <TextBlock
+                    Opacity="0.7"
+                    IsTextSelectionEnabled="True"
+                    TextWrapping="Wrap"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="{x:Bind vm:SettingsViewModel.ConfigFolder}" />
+                <HyperlinkButton
+                    Content="Open the folder"
+                    Padding="0"
+                    Command="{x:Bind ViewModel.OpenConfigFolderCommand}" />
+            </StackPanel>
+
+            <StackPanel Spacing="8">
+                <TextBlock Text="Updates" Style="{StaticResource SubtitleTextBlockStyle}" />
+
+                <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.IsUpdateSupported, Mode=OneWay}">
+                    <StackPanel Spacing="4">
+                        <ToggleSwitch
+                            Header="Check for updates when I open Dongled"
+                            IsOn="{x:Bind ViewModel.CheckForUpdates, Mode=TwoWay}" />
+                        <TextBlock
+                            Opacity="0.6"
+                            TextWrapping="Wrap"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="One request to api.github.com, only when you open this window and at most every few hours. Nothing is downloaded unless you click Update, and nothing about you or your devices is sent." />
+                    </StackPanel>
+
+                    <TextBlock
+                        TextWrapping="Wrap"
+                        Text="{x:Bind ViewModel.UpdateStatus, Mode=OneWay}" />
+
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button
+                            Content="Check now"
+                            Command="{x:Bind ViewModel.CheckNowCommand, Mode=OneWay}" />
+                        <Button
+                            Content="Update"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Visibility="{x:Bind ViewModel.CanUpdate, Mode=OneWay}"
+                            Command="{x:Bind ViewModel.UpdateCommand, Mode=OneWay}" />
+                        <HyperlinkButton
+                            Content="Release notes"
+                            Visibility="{x:Bind ViewModel.HasReleaseNotes, Mode=OneWay}"
+                            NavigateUri="{x:Bind ViewModel.ReleaseNotesUrl, Mode=OneWay}" />
+                    </StackPanel>
+                </StackPanel>
+
+                <TextBlock
+                    Opacity="0.6"
+                    TextWrapping="Wrap"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Visibility="{x:Bind ViewModel.IsDevelopmentBuild, Mode=OneWay}"
+                    Text="This is a development build. It never checks for updates and makes no request to GitHub." />
+            </StackPanel>
+
+            <StackPanel Spacing="4">
+                <TextBlock Text="About" Style="{StaticResource SubtitleTextBlockStyle}" />
+                <TextBlock
+                    Opacity="0.7"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="{x:Bind vm:SettingsViewModel.Version}" />
+                <TextBlock
+                    Opacity="0.6"
+                    TextWrapping="Wrap"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Builds are not code signed. Windows will say the publisher is unknown." />
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

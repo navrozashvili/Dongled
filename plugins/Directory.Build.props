@@ -1,0 +1,59 @@
+<Project>
+
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!-- Held to the same bar as src/, for the same reason the sample plugin is: a plugin is code a
+       stranger copies, and it is the last place to relax the rules the copy will be judged by.
+       tools/Directory.Build.props deliberately does not set these; src/Directory.Build.props does.
+       InvariantGlobalization is not here because it is an application setting and means nothing in a
+       library, and GenerateDocumentationFile is not either: src/ turns it on for the analyzer
+       benefits and then has to suppress CS1591, and a plugin ships no public API to document. -->
+  <PropertyGroup Label="Analysis">
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-all</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+  <!-- A shipped plugin is pinned by a hash over every file in its folder, and a release fails if a
+       plugin's hash changed while its <Version> did not. So a plugin whose source did not change
+       has to build to the same bytes at every later commit, on any machine, with the SDK that
+       global.json pins.
+
+       No debug information in Release. A deterministic build still records the PDB's identity in
+       the DLL, and that identity is a hash over the PDB, which covers source line numbers,
+       source-file checksums and line endings. Any edit to a comment, or to Dongled.Abstractions,
+       would change the plugin's bytes. The cost is that a Release plugin's stack traces carry no
+       line numbers; Debug builds keep full symbols. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+
+  <!-- What "dotnet publish" puts in a plugin folder: the plugin, its .deps.json and its own
+       dependencies. No .pdb or reference documentation .xml, and no Dongled.Abstractions.*: the
+       host pins the SDK to its own copy (see PluginLoadContext), so a copy here is never loaded,
+       and shipping it would tie every plugin's hash to every change in the SDK project. -->
+  <PropertyGroup>
+    <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+    <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
+    <PublishDocumentationFile>false</PublishDocumentationFile>
+  </PropertyGroup>
+
+  <Target Name="DongledTrimPluginPublishOutput" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish
+        Remove="@(ResolvedFileToPublish)"
+        Condition="'%(Filename)' == 'Dongled.Abstractions' or '%(Extension)' == '.pdb'" />
+    </ItemGroup>
+  </Target>
+
+</Project>

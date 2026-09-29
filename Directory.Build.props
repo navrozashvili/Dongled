@@ -1,0 +1,26 @@
+<Project>
+
+  <PropertyGroup>
+    <!-- Shared metadata. -->
+    <Product>Dongled</Product>
+    <Company>Dongled contributors</Company>
+    <Copyright>Copyright (c) Dongled contributors</Copyright>
+    <PackageLicenseExpression>MPL-2.0</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/navrozashvili/Dongled</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Reproducible builds. -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+    <!-- No "+<commit>" suffix on InformationalVersion. Two reasons: a plugin whose source did not
+         change must build to the same bytes at any later commit, and the app's version is compared
+         against a release tag, where build metadata would only get in the way. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <!-- Supply-chain hygiene: committed lock files, restored with the
+         locked-mode flag in CI. (XML comments cannot contain a double hyphen.) -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+
+</Project>

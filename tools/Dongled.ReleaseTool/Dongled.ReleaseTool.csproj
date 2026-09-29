@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- Dongled.Core's target, because this references it. -->
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>Dongled.ReleaseTool</RootNamespace>
+    <AssemblyName>Dongled.ReleaseTool</AssemblyName>
+    <Description>Release helper: plugin manifests and the version check, zips, SHA256SUMS. Run by build/release.ps1.</Description>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <!-- Held to the same analyzer bar as src/, for the same reason as the sample plugin: this code
+       decides what a release trusts. -->
+  <PropertyGroup Label="Analysis">
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-all</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- CA1303: a build tool's console messages are not localized. -->
+    <NoWarn>$(NoWarn);CA1303</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Referenced rather than reimplemented: the release has to compute exactly the manifest hash
+         the loader will compute on the user's machine, so both use PluginManifest itself. -->
+    <ProjectReference Include="..\..\src\Dongled.Core\Dongled.Core.csproj" />
+  </ItemGroup>
+
+</Project>

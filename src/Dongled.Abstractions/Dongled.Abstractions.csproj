@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Dongled.Abstractions</RootNamespace>
+    <AssemblyName>Dongled.Abstractions</AssemblyName>
+    <Description>Plugin SDK for Dongled. Intentionally dependency-free.</Description>
+    <!-- Single source of truth for the plugin API version. The SDK derives
+         AssemblyVersion, AssemblyFileVersion, AssemblyInformationalVersion, and the
+         package version from this one property. The host's compatibility check
+         reads the resulting AssemblyVersion out of a plugin's metadata reference
+         to this assembly, so this line is the only thing to bump: minor for
+         additive changes, major for breaking ones. -->
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <!-- No PackageReference elements. This assembly stays dependency-free so
+       plugin authors are not coupled to a Microsoft.Extensions.Logging version. -->
+
+</Project>

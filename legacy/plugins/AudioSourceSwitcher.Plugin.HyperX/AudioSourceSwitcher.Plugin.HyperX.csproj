@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>AudioSourceSwitcher.Plugin.HyperX</AssemblyName>
+    <!-- Ensure NuGet runtime dependencies (e.g., NetMQ.dll) are copied to the build output so we can deploy them with the plugin -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <!-- Archived source from the earlier WinForms app. Exempt from the repository's build
+         rules; it is not part of any build. See legacy/plugins/README.md. -->
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <!-- NuGet audit codes, suppressed for the legacy tree only: the accepted
+         NetMQ 4.0.1.13 advisories would otherwise break its zero-warning build.
+         CI's blocking vulnerability gate covers the new src/ and tests/ projects. -->
+    <NoWarn>$(NoWarn);NU1901;NU1902;NU1903;NU1904</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AudioSourceSwitcher.Abstractions\AudioSourceSwitcher.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NetMQ" Version="4.0.1.13" />
+  </ItemGroup>
+
+  <!-- Convenience: copy the plugin DLL into the host app's Plugins directory on build -->
+  <Target Name="CopyPluginToHostPluginsDir" AfterTargets="Build">
+    <PropertyGroup>
+      <_HostPluginsDir>..\AudioSourceSwitcher\bin\$(Configuration)\net8.0-windows\Plugins\</_HostPluginsDir>
+    </PropertyGroup>
+    <MakeDir Directories="$(_HostPluginsDir)" />
+    <!-- Copy the plugin assembly AND its deps.json so PluginLoadContext's AssemblyDependencyResolver can locate NuGet deps (e.g., NetMQ) -->
+    <Copy SourceFiles="$(TargetPath);$(TargetDir)$(AssemblyName).deps.json;@(ReferenceCopyLocalPaths)"
+          DestinationFolder="$(_HostPluginsDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>
+
+

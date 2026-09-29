@@ -1,0 +1,68 @@
+<Project>
+
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Analysis">
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-all</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- CS1591 (missing XML comment): GenerateDocumentationFile is on for the
+         analyzer benefits, not to force a doc comment on every member. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <!-- Release identity. Only build/release.ps1, run by the release workflow, passes a real
+       DongledVersion and DongledOfficialBuild=true. Every other build (Debug or Release, local or
+       pull request CI) is 0.0.0-dev and not official.
+
+       DongledVersion is its own property rather than Version because a property given on the
+       command line flows into every referenced project, and Dongled.Abstractions must keep its
+       own Version: the plugin API compatibility check reads it. -->
+  <PropertyGroup Label="Release identity">
+    <DongledVersion Condition="'$(DongledVersion)' == ''">0.0.0-dev</DongledVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Dongled.App'">
+    <Version>$(DongledVersion)</Version>
+  </PropertyGroup>
+
+  <!-- Read at run time from Dongled.dll as AssemblyMetadataAttribute values. Item conditions are
+       evaluated after every property, so these see the final SelfContained, including one given on
+       the command line: the flavor is derived from how the app was actually built and cannot
+       disagree with it. -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Dongled.App'">
+    <AssemblyMetadata Include="DongledOfficialBuild" Value="true" Condition="'$(DongledOfficialBuild)' == 'true'" />
+    <AssemblyMetadata Include="DongledOfficialBuild" Value="false" Condition="'$(DongledOfficialBuild)' != 'true'" />
+    <AssemblyMetadata Include="DongledFlavor" Value="self-contained" Condition="'$(SelfContained)' == 'true'" />
+    <AssemblyMetadata Include="DongledFlavor" Value="framework-dependent" Condition="'$(SelfContained)' != 'true'" />
+  </ItemGroup>
+
+  <Target
+    Name="DongledRequireOfficialVersion"
+    BeforeTargets="CoreCompile"
+    Condition="'$(MSBuildProjectName)' == 'Dongled.App' and '$(DongledOfficialBuild)' == 'true' and '$(DongledVersion)' == '0.0.0-dev'">
+    <Error Text="An official build needs a real version. Pass DongledVersion=major.minor.patch along with DongledOfficialBuild=true." />
+  </Target>
+
+  <!-- The plugins shipped in a release, by directory name and manifest hash. build/release.ps1
+       writes the file and passes its path; the loader treats a directory whose name and hash both
+       match an entry as approved. Compiled into Dongled.Core.dll rather than left beside the exe,
+       so it is exactly as trustworthy as the host binaries. Any other build embeds nothing, and
+       every plugin needs the user's approval as before. -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Dongled.Core' and '$(DongledBundledPlugins)' != ''">
+    <EmbeddedResource
+      Include="$(DongledBundledPlugins)"
+      LogicalName="Dongled.Core.Plugins.BundledPlugins.json"
+      WithCulture="false" />
+  </ItemGroup>
+
+</Project>

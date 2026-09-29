@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Dongled.App.Pages.StatusPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:Dongled.App.ViewModels">
+
+    <ScrollViewer>
+        <StackPanel
+            Margin="28"
+            Spacing="22"
+            MaxWidth="760"
+            HorizontalAlignment="Center">
+
+            <TextBlock Text="Status" Style="{StaticResource TitleTextBlockStyle}" />
+
+            <InfoBar
+                IsOpen="{x:Bind ViewModel.IsUpdateBannerOpen, Mode=OneWay}"
+                IsClosable="True"
+                CloseButtonClick="OnUpdateBannerCloseClick"
+                Severity="Informational"
+                Title="{x:Bind ViewModel.UpdateBannerTitle, Mode=OneWay}"
+                Message="{x:Bind ViewModel.UpdateBannerMessage, Mode=OneWay}">
+                <InfoBar.ActionButton>
+                    <Button
+                        Content="Update"
+                        Command="{x:Bind ViewModel.UpdateCommand, Mode=OneWay}" />
+                </InfoBar.ActionButton>
+                <HyperlinkButton
+                    Content="Release notes"
+                    Margin="0,0,0,8"
+                    NavigateUri="{x:Bind ViewModel.ReleaseNotesUrl, Mode=OneWay}" />
+            </InfoBar>
+
+            <InfoBar
+                IsOpen="{x:Bind ViewModel.HasProblem, Mode=OneWay}"
+                IsClosable="False"
+                Severity="Error"
+                Message="{x:Bind ViewModel.Problem, Mode=OneWay}" />
+
+            <StackPanel Spacing="8">
+                <TextBlock Text="Playing to" Style="{StaticResource SubtitleTextBlockStyle}" />
+                <Grid ColumnSpacing="16" RowSpacing="6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Media" Opacity="0.7" />
+                    <TextBlock Grid.Row="0" Grid.Column="1" TextWrapping="Wrap"
+                               Text="{x:Bind ViewModel.MediaDefault, Mode=OneWay}" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Calls" Opacity="0.7" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" TextWrapping="Wrap"
+                               Text="{x:Bind ViewModel.CallsDefault, Mode=OneWay}" />
+                </Grid>
+            </StackPanel>
+
+            <StackPanel Spacing="8">
+                <TextBlock Text="Detected sources" Style="{StaticResource SubtitleTextBlockStyle}" />
+
+                <TextBlock
+                    Opacity="0.7"
+                    TextWrapping="Wrap"
+                    Visibility="{x:Bind ViewModel.HasNoSources, Mode=OneWay}"
+                    Text="No plugin is publishing any source. Enable one on the Plugins page." />
+
+                <ItemsControl ItemsSource="{x:Bind ViewModel.Sources, Mode=OneWay}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SourceRow">
+                            <Grid ColumnSpacing="10" Padding="0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Column="0" Text="{x:Bind Glyph}" />
+
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="{x:Bind Name}" TextWrapping="Wrap" />
+                                    <TextBlock
+                                        Text="{x:Bind Detail}"
+                                        Visibility="{x:Bind HasDetail}"
+                                        Opacity="0.6"
+                                        Style="{StaticResource CaptionTextBlockStyle}"
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+
+                                <TextBlock
+                                    Grid.Column="2"
+                                    Text="{x:Bind Battery}"
+                                    Visibility="{x:Bind HasBattery}"
+                                    Opacity="0.7" />
+
+                                <TextBlock Grid.Column="3" Text="{x:Bind State}" Opacity="0.7" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <StackPanel Spacing="8">
+                <TextBlock Text="Recent activity" Style="{StaticResource SubtitleTextBlockStyle}" />
+
+                <ItemsControl ItemsSource="{x:Bind ViewModel.Activity, Mode=OneWay}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ActivityRow">
+                            <Grid ColumnSpacing="12" Padding="0,3">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Column="0" Text="{x:Bind Time}" Opacity="0.6"
+                                           Style="{StaticResource CaptionTextBlockStyle}" />
+                                <TextBlock Grid.Column="1" Text="{x:Bind Text}" TextWrapping="Wrap"
+                                           Style="{StaticResource CaptionTextBlockStyle}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

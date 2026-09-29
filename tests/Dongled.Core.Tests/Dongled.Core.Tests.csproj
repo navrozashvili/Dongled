@@ -1,0 +1,81 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>Dongled.Core.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Dongled.Core\Dongled.Core.csproj" />
+    <ProjectReference Include="..\..\src\Dongled.Abstractions\Dongled.Abstractions.csproj" />
+    <!-- Built, never referenced. A reference would put the sample's output in this project's own
+         directory, where the default load context resolves assemblies, so the loader tests would
+         be exercising the default context instead of the plugin one. ReferenceOutputAssembly
+         false gets the build-order guarantee without the reference. -->
+    <ProjectReference Include="..\..\tools\Dongled.Plugin.Sample\Dongled.Plugin.Sample.csproj"
+                      ReferenceOutputAssembly="false"
+                      Private="false" />
+    <!-- The ported plugins, staged the same way and for the same reason. These tests are the only
+         ones that load a ported plugin through the real loader; Plugins.Tests references them for
+         real, which is exactly why its tests cannot do this. -->
+    <ProjectReference Include="..\..\plugins\Dongled.Plugin.HyperXHid\Dongled.Plugin.HyperXHid.csproj"
+                      ReferenceOutputAssembly="false"
+                      Private="false" />
+    <ProjectReference Include="..\..\plugins\Dongled.Plugin.Logitech\Dongled.Plugin.Logitech.csproj"
+                      ReferenceOutputAssembly="false"
+                      Private="false" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <SamplePluginOutputDirectory>$(MSBuildThisFileDirectory)..\..\tools\Dongled.Plugin.Sample\bin\$(Configuration)\net10.0\</SamplePluginOutputDirectory>
+    <!-- With an artifacts path (the artifacts-path option) the plugins build under the artifacts root instead of their own bin,
+         and staging from bin would silently pick up whatever an earlier build left there. -->
+    <SamplePluginOutputDirectory Condition="'$(UseArtifactsOutput)' == 'true'">$(ArtifactsPath)\bin\Dongled.Plugin.Sample\$(Configuration.ToLowerInvariant())\</SamplePluginOutputDirectory>
+  </PropertyGroup>
+
+  <!-- Staged into a subdirectory, not beside the test assembly: the default load context probes
+       the base directory, and a copy of the sample there would be resolved from it. Nothing
+       probes a subfolder. -->
+  <Target Name="StageSamplePlugin" AfterTargets="Build">
+    <ItemGroup>
+      <SamplePluginFile Include="$(SamplePluginOutputDirectory)**\*" />
+    </ItemGroup>
+    <Error Condition="'@(SamplePluginFile)' == ''"
+           Text="The sample plugin produced no output at $(SamplePluginOutputDirectory). The ProjectReference should have built it first." />
+    <Copy SourceFiles="@(SamplePluginFile)"
+          DestinationFolder="$(OutDir)SamplePlugin\%(RecursiveDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <PropertyGroup>
+    <PortedPluginsRoot>$(MSBuildThisFileDirectory)..\..\plugins\</PortedPluginsRoot>
+    <HyperXHidPluginOutputDirectory>$(PortedPluginsRoot)Dongled.Plugin.HyperXHid\bin\$(Configuration)\net10.0\</HyperXHidPluginOutputDirectory>
+    <LogitechPluginOutputDirectory>$(PortedPluginsRoot)Dongled.Plugin.Logitech\bin\$(Configuration)\net10.0\</LogitechPluginOutputDirectory>
+    <HyperXHidPluginOutputDirectory Condition="'$(UseArtifactsOutput)' == 'true'">$(ArtifactsPath)\bin\Dongled.Plugin.HyperXHid\$(Configuration.ToLowerInvariant())\</HyperXHidPluginOutputDirectory>
+    <LogitechPluginOutputDirectory Condition="'$(UseArtifactsOutput)' == 'true'">$(ArtifactsPath)\bin\Dongled.Plugin.Logitech\$(Configuration.ToLowerInvariant())\</LogitechPluginOutputDirectory>
+  </PropertyGroup>
+
+  <!-- Staged into subdirectories for the same reason as the sample plugin above. -->
+  <Target Name="StagePortedPlugins" AfterTargets="Build">
+    <ItemGroup>
+      <HyperXHidPluginFile Include="$(HyperXHidPluginOutputDirectory)**\*" />
+      <LogitechPluginFile Include="$(LogitechPluginOutputDirectory)**\*" />
+    </ItemGroup>
+    <Error Condition="'@(HyperXHidPluginFile)' == '' or '@(LogitechPluginFile)' == ''"
+           Text="A ported plugin produced no output. The ProjectReferences should have built them first." />
+    <Copy SourceFiles="@(HyperXHidPluginFile)"
+          DestinationFolder="$(OutDir)PortedPlugins\HyperXHid\%(RecursiveDir)"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(LogitechPluginFile)"
+          DestinationFolder="$(OutDir)PortedPlugins\Logitech\%(RecursiveDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+  </ItemGroup>
+
+</Project>

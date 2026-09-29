@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Dongled.Plugin.Logitech</RootNamespace>
+    <AssemblyName>Dongled.Plugin.Logitech</AssemblyName>
+    <Description>Presence from Logitech G HUB's local agent websocket.</Description>
+    <!-- This plugin's own version, independent of the app's. Bump it whenever the plugin's shipped
+         files change: a release fails if the folder's manifest hash differs from the previous
+         release while this stays the same. Nothing bumps it automatically. -->
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- A plugin references only the SDK. ClientWebSocket and System.Text.Json are in the
+         framework, so this plugin has no NuGet dependency at all. It still gets a packages.lock.json,
+         because RestorePackagesWithLockFile is set at the repository root. -->
+    <ProjectReference Include="..\..\src\Dongled.Abstractions\Dongled.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

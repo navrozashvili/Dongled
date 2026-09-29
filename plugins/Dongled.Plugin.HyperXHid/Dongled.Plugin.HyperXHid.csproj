@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Dongled.Plugin.HyperXHid</RootNamespace>
+    <AssemblyName>Dongled.Plugin.HyperXHid</AssemblyName>
+    <Description>Presence for the HyperX Cloud III S Wireless, from the dongle's HID event reports.</Description>
+    <!-- This plugin's own version, independent of the app's. Bump it whenever the plugin's shipped
+         files change: a release fails if the folder's manifest hash differs from the previous
+         release while this stays the same. Nothing bumps it automatically. -->
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Required, not cosmetic: a plugin directory is the trust unit and is hashed whole, so
+         HidSharp.dll has to be in the output for AssemblyDependencyResolver to find it beside the
+         plugin. Without this the staged directory is missing its only dependency and the provider
+         fails at its first HID call rather than at load. -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- A plugin references only the SDK, plus whatever its own vendor access needs. -->
+    <ProjectReference Include="..\..\src\Dongled.Abstractions\Dongled.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="HidSharp" />
+  </ItemGroup>
+
+</Project>

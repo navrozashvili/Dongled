@@ -1,0 +1,80 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <RootNamespace>Dongled.App</RootNamespace>
+    <!-- Deliberately not the project name. The binary a user launches, pins to a taskbar and reads
+         in Task Manager is the tool itself, so it is Dongled.exe rather than Dongled.App.exe.
+         ".App" is an internal distinction from Dongled.Core and there is no reason to make a user
+         read it. Nothing keys off this: plugin discovery matches Dongled.Plugin.*.dll and the SDK
+         identity the loader pins is Dongled.Abstractions, neither of which is this assembly. -->
+    <AssemblyName>Dongled</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Embeds the icon in the apphost, which is what Explorer, the taskbar's pinned entry and any
+         shortcut read. Setting it on the window at runtime is not enough: that only reaches a window
+         that already exists, so the executable itself would still show the generic icon. -->
+    <ApplicationIcon>Assets\TrayIcon.ico</ApplicationIcon>
+    <!-- Required by the LibraryImport-generated stub for BatteryTrayIconRenderer's DestroyIcon
+         P/Invoke (SYSLIB1062). LibraryImport is otherwise the SYSLIB1054-mandated replacement for
+         DllImport in this repo; the generated marshalling code for this signature needs unsafe. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <PropertyGroup Label="WinUI 3, unpackaged, self-contained">
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
+    <!-- Also what keeps the tray app from flashing a console: OutputType=WinExe plus a
+         concrete RuntimeIdentifier is what makes Microsoft.NET.Sdk.targets set
+         _UseWindowsGraphicalUserInterface, i.e. emit a GUI apphost. If RuntimeIdentifier
+         is ever dropped, re-check that the app still starts without a console window. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <EnableMsixTooling>false</EnableMsixTooling>
+    <!-- The single-instance guard has to run before the XAML runtime starts, because a
+         second copy must exit without ever creating an Application. The generated entry point
+         calls Application.Start immediately, so this replaces it with Program.cs. The generated
+         one is still compiled, renamed to XamlGeneratedProgram.XamlGeneratedMain, and is the
+         reference for what Program.Main has to do. -->
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+  </PropertyGroup>
+
+  <!-- CA1515 is deliberately left enabled here. App is exempted by a type-scoped
+       suppression in GlobalSuppressions.cs, so the rule still catches any other type that
+       becomes public by accident. -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" />
+    <PackageReference Include="H.NotifyIcon.WinUI" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Dongled.Core\Dongled.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\TrayIcon.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!-- An unpackaged publish leaves out the app's own resource index, which holds the compiled XAML.
+       The build output has it, so the app runs from bin, but a published copy crashes inside
+       Microsoft.UI.Xaml before any window appears. -->
+  <Target Name="PublishAppResourceIndex" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Include="$(OutDir)$(AssemblyName).pri"
+                             Condition="Exists('$(OutDir)$(AssemblyName).pri')"
+                             RelativePath="$(AssemblyName).pri"
+                             CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+    <Error Condition="!Exists('$(OutDir)$(AssemblyName).pri')"
+           Text="$(AssemblyName).pri was not produced, so a published copy of the app would crash at startup." />
+  </Target>
+
+</Project>

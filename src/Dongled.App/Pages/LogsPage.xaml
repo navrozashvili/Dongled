@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Dongled.App.Pages.LogsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:Dongled.App.ViewModels">
+
+    <Grid Margin="28" RowSpacing="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Logs" Style="{StaticResource TitleTextBlockStyle}" />
+
+        <StackPanel Grid.Row="1" Spacing="8">
+            <InfoBar
+                IsOpen="{x:Bind ViewModel.HasProblem, Mode=OneWay}"
+                IsClosable="False"
+                Severity="Error"
+                Message="{x:Bind ViewModel.Problem, Mode=OneWay}" />
+            <InfoBar
+                IsOpen="{x:Bind ViewModel.HasNotice, Mode=OneWay}"
+                IsClosable="True"
+                Severity="Success"
+                Message="{x:Bind ViewModel.Notice, Mode=OneWay}" />
+        </StackPanel>
+
+        <StackPanel
+            Grid.Row="2"
+            Orientation="Horizontal"
+            Spacing="12"
+            VerticalAlignment="Bottom">
+
+            <ComboBox
+                Header="Show"
+                MinWidth="160"
+                SelectedIndex="{x:Bind ViewModel.LevelIndex, Mode=TwoWay}">
+                <ComboBoxItem Content="Debug and above" />
+                <ComboBoxItem Content="Information and above" />
+                <ComboBoxItem Content="Warnings and above" />
+                <ComboBoxItem Content="Errors only" />
+            </ComboBox>
+
+            <Button Content="Open folder" Command="{x:Bind ViewModel.OpenFolderCommand}" VerticalAlignment="Bottom" />
+            <Button Content="Copy for bug report" Command="{x:Bind ViewModel.CopyForBugReportCommand}" VerticalAlignment="Bottom" />
+            <Button Content="Clear" Command="{x:Bind ViewModel.ClearCommand}" VerticalAlignment="Bottom" />
+        </StackPanel>
+
+        <Grid Grid.Row="3">
+            <TextBlock
+                Opacity="0.7"
+                VerticalAlignment="Top"
+                TextWrapping="Wrap"
+                Visibility="{x:Bind ViewModel.HasNoEntries, Mode=OneWay}"
+                Text="Nothing has been logged at this level yet." />
+
+            <ListView
+                ItemsSource="{x:Bind ViewModel.Entries, Mode=OneWay}"
+                SelectionMode="None"
+                IsItemClickEnabled="False">
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="vm:LogRow">
+                        <Grid ColumnSpacing="10" Padding="0,3">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="52" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock
+                                Grid.Column="0"
+                                Text="{x:Bind Time}"
+                                Opacity="0.6"
+                                FontFamily="Consolas"
+                                Style="{StaticResource CaptionTextBlockStyle}" />
+                            <TextBlock
+                                Grid.Column="1"
+                                Text="{x:Bind Level}"
+                                Opacity="0.8"
+                                FontFamily="Consolas"
+                                Style="{StaticResource CaptionTextBlockStyle}" />
+                            <StackPanel Grid.Column="2">
+                                <TextBlock
+                                    Text="{x:Bind Message}"
+                                    TextWrapping="Wrap"
+                                    IsTextSelectionEnabled="True"
+                                    Style="{StaticResource CaptionTextBlockStyle}" />
+                                <TextBlock
+                                    Text="{x:Bind Category}"
+                                    Opacity="0.5"
+                                    TextWrapping="Wrap"
+                                    Style="{StaticResource CaptionTextBlockStyle}" />
+                            </StackPanel>
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Grid>
+    </Grid>
+</Page>

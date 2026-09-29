@@ -1,0 +1,13 @@
+<Project>
+
+  <Import Project="$(MSBuildThisFileDirectory)../src/Directory.Build.props" />
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- CA1515: test classes are public by xUnit convention. -->
+    <NoWarn>$(NoWarn);CA1515</NoWarn>
+  </PropertyGroup>
+
+</Project>

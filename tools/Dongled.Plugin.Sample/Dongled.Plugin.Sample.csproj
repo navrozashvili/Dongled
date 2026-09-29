@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Dongled.Plugin.Sample</RootNamespace>
+    <AssemblyName>Dongled.Plugin.Sample</AssemblyName>
+    <Description>A minimal Dongled provider. Worked example and loader test fixture.</Description>
+  </PropertyGroup>
+
+  <!-- Held to the same analyzer bar as src/, unlike the rest of tools/. A worked example a
+       stranger copies is the last place to relax the rules the copied code will be judged by.
+       tools/Directory.Build.props deliberately does not set these; src/Directory.Build.props
+       does, and duplicating the four lines here is clearer than making every tool obey them. -->
+  <PropertyGroup Label="Analysis">
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-all</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- A plugin references only the SDK. The SDK is dependency-free by design, so a
+         plugin author is never coupled to the host's logging or DI versions. -->
+    <ProjectReference Include="..\..\src\Dongled.Abstractions\Dongled.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

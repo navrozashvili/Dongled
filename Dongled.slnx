@@ -1,0 +1,24 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Dongled.Abstractions/Dongled.Abstractions.csproj" />
+    <Project Path="src/Dongled.Core/Dongled.Core.csproj" />
+    <Project Path="src/Dongled.App/Dongled.App.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Dongled.Core.Tests/Dongled.Core.Tests.csproj" />
+    <Project Path="tests/Dongled.App.Tests/Dongled.App.Tests.csproj" />
+    <Project Path="tests/Dongled.Plugins.Tests/Dongled.Plugins.Tests.csproj" />
+  </Folder>
+  <Folder Name="/plugins/">
+    <Project Path="plugins/Dongled.Plugin.HyperXHid/Dongled.Plugin.HyperXHid.csproj" />
+    <Project Path="plugins/Dongled.Plugin.Logitech/Dongled.Plugin.Logitech.csproj" />
+  </Folder>
+  <!-- The sample plugin is in the solution although tools/InspectAssembly is not: it is
+       the worked example for plugin authors, so a stranger opening the solution
+       should find it, and the Core tests build it as a fixture either way. -->
+  <Folder Name="/tools/">
+    <Project Path="tools/Dongled.Plugin.Sample/Dongled.Plugin.Sample.csproj" />
+  </Folder>
+  <!-- legacy/plugins/ is deliberately absent: two older plugins nobody has ported, kept as
+       source only. See legacy/plugins/README.md. -->
+</Solution>
