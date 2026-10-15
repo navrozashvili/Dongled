@@ -27,6 +27,17 @@ public interface IAudioEndpointService
     event EventHandler<DefaultChangedEventArgs>? DefaultChanged;
 
     /// <summary>
+    /// Raised when an endpoint is added or becomes active: a Bluetooth speaker reconnecting, a
+    /// cable plugged in, a device enabled in sound settings. Rare, so a handler may treat each one
+    /// as a cue to look again.
+    /// </summary>
+    /// <remarks>
+    /// Raised on a thread Windows owns. A handler must return quickly and marshal for itself;
+    /// calling back into Windows audio from it can deadlock the audio service.
+    /// </remarks>
+    event EventHandler<EndpointActivatedEventArgs>? EndpointActivated;
+
+    /// <summary>
     /// Every playback endpoint in any state, ordered the way the UI wants them: the endpoints
     /// currently holding a role first, then active ones, then by name.
     /// </summary>

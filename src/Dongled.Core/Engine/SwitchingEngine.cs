@@ -75,11 +75,18 @@ public sealed class SwitchingEngine : ISwitchingEngine, IDisposable
     private readonly StabilizationScheduler _scheduler;
     private readonly StartupReconciler _reconciler;
 
+    // Rules whose return found nowhere to go because the device was not connected, keyed by
+    // WaitKey. Retried when an endpoint becomes active. Consumer only.
+    private readonly HashSet<string> _waitingForDevice = new(StringComparer.OrdinalIgnoreCase);
+
     private AppConfig _config = new();
     private bool _disposed;
 
     // 1 while a reload request is queued and not yet handled. Written from any thread.
     private int _reloadPending;
+
+    // 1 while an activation is queued and not yet handled. Written from Windows' threads.
+    private int _activationPending;
 
     /// <param name="endpoints">Windows audio, or a fake standing in for it.</param>
     /// <param name="configStore">Where rules and settings are read from.</param>
@@ -119,6 +126,8 @@ public sealed class SwitchingEngine : ISwitchingEngine, IDisposable
             _actions,
             PresenceResolutionCeiling,
             loggerFactory.CreateLogger<StartupReconciler>());
+
+        _endpoints.EndpointActivated += OnEndpointActivated;
     }
 
     /// <summary>
@@ -199,7 +208,7 @@ public sealed class SwitchingEngine : ISwitchingEngine, IDisposable
         var signal = new ConfigurationReloadRequested(_time.GetUtcNow());
         if (!_channel.Writer.TryWrite(signal))
         {
-            _ = WriteReloadWhenThereIsRoomAsync(signal);
+            _ = WriteWhenThereIsRoomAsync(signal);
         }
     }
 
@@ -252,8 +261,28 @@ public sealed class SwitchingEngine : ISwitchingEngine, IDisposable
         }
 
         _disposed = true;
+        _endpoints.EndpointActivated -= OnEndpointActivated;
         CompleteInput();
         _scheduler.Dispose();
+    }
+
+    /// <remarks>
+    /// On a Windows audio thread, which must not be held: queue and return, the way
+    /// <see cref="RequestConfigurationReload"/> does. Activations coalesce, since one look at what is
+    /// connected answers any number of them, and a speaker connecting raises several at once.
+    /// </remarks>
+    private void OnEndpointActivated(object? sender, EndpointActivatedEventArgs e)
+    {
+        if (Interlocked.Exchange(ref _activationPending, 1) == 1)
+        {
+            return;
+        }
+
+        var signal = new EndpointBecameActive(_time.GetUtcNow());
+        if (!_channel.Writer.TryWrite(signal))
+        {
+            _ = WriteWhenThereIsRoomAsync(signal);
+        }
     }
 
     private void Handle(EngineSignal signal)
@@ -288,6 +317,10 @@ public sealed class SwitchingEngine : ISwitchingEngine, IDisposable
 
             case StartupResolutionFinished:
                 HandleStartupResolutionFinished();
+                break;
+
+            case EndpointBecameActive:
+                HandleEndpointBecameActive();
                 break;
 
             case ConfigurationReloadRequested:
@@ -351,6 +384,8 @@ public sealed class SwitchingEngine : ISwitchingEngine, IDisposable
             _scheduler.Cancel(reported.SourceId);
             foreach (var rule in rules)
             {
+                // Back on before its device turned up: the return is no longer wanted.
+                _waitingForDevice.Remove(WaitKey(rule));
                 Apply(rule, _actions.SwitchToTarget);
             }
 
@@ -409,9 +444,91 @@ public sealed class SwitchingEngine : ISwitchingEngine, IDisposable
 
         foreach (var rule in RulesFor(elapsed.SourceId))
         {
-            Apply(rule, _actions.ApplyDisconnect);
+            Apply(rule, ApplyReturn);
         }
     }
+
+    /// <summary>Apply a rule's disconnect behaviour, and remember it if its device is not here yet.</summary>
+    private void ApplyReturn(Rule rule)
+    {
+        if (_actions.ApplyDisconnect(rule) == ReturnOutcome.WaitingForDevice)
+        {
+            WaitForDevice(rule);
+        }
+    }
+
+    private void WaitForDevice(Rule rule)
+    {
+        if (_waitingForDevice.Add(WaitKey(rule)) && _logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "Rule {RuleName} will return {SourceId}'s roles once the device it returns to connects.",
+                rule.Name,
+                rule.Source.Id);
+        }
+    }
+
+    /// <summary>
+    /// Something connected. Try each waiting return again, unless it is no longer wanted: its
+    /// source came back, or something other than its target now holds every role, which means
+    /// someone chose that device in the meantime.
+    /// </summary>
+    private void HandleEndpointBecameActive()
+    {
+        // Cleared before looking, like the reload flag: an activation during the look queues anew.
+        Volatile.Write(ref _activationPending, 0);
+
+        if (_waitingForDevice.Count == 0)
+        {
+            return;
+        }
+
+        // A rule deleted, or replaced by a reload, can no longer be retried.
+        _waitingForDevice.IntersectWith(_config.Rules.Where(static rule => rule.Enabled).Select(WaitKey));
+
+        foreach (var rule in _config.Rules)
+        {
+            var key = WaitKey(rule);
+            if (!_waitingForDevice.Contains(key))
+            {
+                continue;
+            }
+
+            try
+            {
+                if (PresenceOf(rule.Source.Id) == Presence.Present || !_actions.TargetHoldsAnyRole(rule))
+                {
+                    if (_logger.IsEnabled(LogLevel.Information))
+                    {
+                        _logger.LogInformation(
+                            "Rule {RuleName} no longer needs to return {SourceId}'s roles; it has stopped waiting.",
+                            rule.Name,
+                            rule.Source.Id);
+                    }
+
+                    _waitingForDevice.Remove(key);
+                    continue;
+                }
+
+                if (_actions.ApplyDisconnect(rule) == ReturnOutcome.Settled)
+                {
+                    _waitingForDevice.Remove(key);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Kept waiting: the next activation tries again.
+                _logger.LogError(ex, "Retrying rule {RuleName}'s return failed.", rule.Name);
+            }
+        }
+    }
+
+    /// <summary>
+    /// What identifies a rule across reloads: its stored identifier, or for a rule not yet saved,
+    /// its source.
+    /// </summary>
+    private static string WaitKey(Rule rule) =>
+        string.IsNullOrEmpty(rule.Id) ? rule.Source.Id : rule.Id;
 
     private void HandleStartupResolutionFinished()
     {
@@ -422,7 +539,7 @@ public sealed class SwitchingEngine : ISwitchingEngine, IDisposable
 
         if (_config.App.ApplyRulesOnStartup)
         {
-            _reconciler.Reconcile(_config.Rules, PresenceOf, _scheduler.HasPending);
+            _reconciler.Reconcile(_config.Rules, PresenceOf, _scheduler.HasPending, WaitForDevice);
         }
 
         _startupCompleted.TrySetResult();
@@ -498,7 +615,7 @@ public sealed class SwitchingEngine : ISwitchingEngine, IDisposable
         }
     }
 
-    private async Task WriteReloadWhenThereIsRoomAsync(ConfigurationReloadRequested signal)
+    private async Task WriteWhenThereIsRoomAsync(EngineSignal signal)
     {
         try
         {
@@ -506,8 +623,11 @@ public sealed class SwitchingEngine : ISwitchingEngine, IDisposable
         }
         catch (ChannelClosedException)
         {
-            // Shutting down. Nothing will apply rules again, so there is nothing to reload for.
-            _logger.LogDebug("A configuration reload was requested after the engine stopped; ignored.");
+            // Shutting down. Nothing will apply rules again, so there is nothing to act on.
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug("A {SignalType} arrived after the engine stopped; ignored.", signal.GetType().Name);
+            }
         }
     }
 

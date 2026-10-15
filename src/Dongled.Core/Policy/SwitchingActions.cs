@@ -108,7 +108,11 @@ internal sealed class SwitchingActions
     }
 
     /// <summary>Apply the rule's disconnect behaviour.</summary>
-    internal void ApplyDisconnect(Rule rule)
+    /// <returns>
+    /// <see cref="ReturnOutcome.WaitingForDevice"/> when nothing was switched only because the
+    /// device to return to is not connected yet.
+    /// </returns>
+    internal ReturnOutcome ApplyDisconnect(Rule rule)
     {
         ArgumentNullException.ThrowIfNull(rule);
 
@@ -123,24 +127,42 @@ internal sealed class SwitchingActions
                         rule.Name);
                 }
 
-                return;
+                return ReturnOutcome.Settled;
 
             case DisconnectMode.AlwaysFallback:
-                SwitchToFallback(rule);
-                return;
+                return SwitchToFallback(rule);
 
             case DisconnectMode.RestorePrevious:
-                RestorePrevious(rule, allowFallback: false);
-                return;
+                return RestorePrevious(rule, allowFallback: false);
 
             case DisconnectMode.RestorePreviousElseFallback:
             default:
                 // A mode built in memory that names no declared member behaves like the ordinary
                 // case rather than throwing on the
                 // switching path. Loaded configuration cannot reach here: the store repairs it.
-                RestorePrevious(rule, allowFallback: true);
-                return;
+                return RestorePrevious(rule, allowFallback: true);
         }
+    }
+
+    /// <summary>
+    /// Whether the rule's target still holds any of the roles it switches. A return that was
+    /// waiting for a device is only still wanted while this is true: once something else holds
+    /// every role, someone chose it, and coming back would override them.
+    /// </summary>
+    /// <exception cref="Exception">Windows audio could not be queried. See <see cref="IAudioEndpointService.GetDefaults"/>.</exception>
+    internal bool TargetHoldsAnyRole(Rule rule)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+
+        var defaults = _endpoints.GetDefaults();
+        IReadOnlyList<AudioEndpoint> endpoints = RuleDevices.HasPattern(rule.Target.NamePattern)
+            ? _endpoints.Enumerate()
+            : [];
+
+        return Roles(rule).Any(role => RuleDevices.IsTarget(
+            rule,
+            role == AudioRole.Media ? defaults.MultimediaId : defaults.CommunicationsId,
+            endpoints));
     }
 
     private static AudioRole[] Roles(Rule rule) => rule.Target.Roles
@@ -213,7 +235,7 @@ internal sealed class SwitchingActions
         return null;
     }
 
-    private void RestorePrevious(Rule rule, bool allowFallback)
+    private ReturnOutcome RestorePrevious(Rule rule, bool allowFallback)
     {
         var previous = _state.GetPrevious(rule.Source.Id);
         var roles = Roles(rule);
@@ -237,7 +259,7 @@ internal sealed class SwitchingActions
                 ex,
                 "Could not list playback endpoints, so the return for {SourceId} was skipped. The default device is left as it is.",
                 rule.Source.Id);
-            return;
+            return ReturnOutcome.Settled;
         }
 
         var multimedia = roles.Contains(AudioRole.Media)
@@ -277,22 +299,31 @@ internal sealed class SwitchingActions
                 _endpoints.SetDefault(communications, RoleArray(AudioRole.Calls));
             }
 
-            return;
+            return ReturnOutcome.Settled;
         }
 
         if (allowFallback)
         {
-            SwitchToFallback(rule);
-            return;
+            return SwitchToFallback(rule);
         }
 
         _logger.LogWarning(
             "{SourceId} disconnected, but nothing it was switched away from is available and rule {RuleName} has no fallback, so the default is left as it is.",
             rule.Source.Id,
             rule.Name);
+
+        // Worth waiting only for a recorded device that is merely not connected. One that is the
+        // rule's own target, or nothing recorded at all, will not change by something connecting.
+        var waiting = (roles.Contains(AudioRole.Media) && Disconnected(previous?.MultimediaId, active))
+            || (roles.Contains(AudioRole.Calls) && Disconnected(previous?.CommunicationsId, active));
+
+        return waiting ? ReturnOutcome.WaitingForDevice : ReturnOutcome.Settled;
     }
 
-    private void SwitchToFallback(Rule rule)
+    private static bool Disconnected(string? deviceId, HashSet<string> active) =>
+        !string.IsNullOrWhiteSpace(deviceId) && !active.Contains(deviceId);
+
+    private ReturnOutcome SwitchToFallback(Rule rule)
     {
         var pattern = rule.OnDisconnect.FallbackNamePattern;
         if (!RuleDevices.HasPattern(pattern) && string.IsNullOrWhiteSpace(rule.OnDisconnect.FallbackDeviceId))
@@ -301,13 +332,17 @@ internal sealed class SwitchingActions
                 "Rule {RuleName} is set to use a fallback device but names none, so nothing happens when {SourceId} disconnects.",
                 rule.Name,
                 rule.Source.Id);
-            return;
+            return ReturnOutcome.Settled;
         }
 
         var fallback = ResolveDevice(rule, pattern, rule.OnDisconnect.FallbackDeviceId);
         if (fallback is null)
         {
-            return;
+            // A usable pattern that matches nothing connected is the speaker that is not here yet.
+            // An unusable one will not start matching by itself.
+            return DeviceNameMatcher.TryValidate(pattern!, out _)
+                ? ReturnOutcome.WaitingForDevice
+                : ReturnOutcome.Settled;
         }
 
         if (_logger.IsEnabled(LogLevel.Information))
@@ -321,7 +356,10 @@ internal sealed class SwitchingActions
 
         // Deliberate asymmetry: a fallback sets both roles regardless of which roles the rule
         // switches. It reads like a bug, but it is the intended behaviour.
-        _endpoints.SetDefault(fallback, BothRoles);
+        // Refused by Windows when the fallback is named by identifier and is not connected.
+        return _endpoints.SetDefault(fallback, BothRoles)
+            ? ReturnOutcome.Settled
+            : ReturnOutcome.WaitingForDevice;
     }
 
     /// <summary>

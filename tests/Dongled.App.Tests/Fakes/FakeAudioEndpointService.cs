@@ -7,6 +7,13 @@ internal sealed class FakeAudioEndpointService : IAudioEndpointService
 {
     public event EventHandler<DefaultChangedEventArgs>? DefaultChanged;
 
+    // Nothing in the App tests reacts to activation; the engine is faked there.
+    public event EventHandler<EndpointActivatedEventArgs>? EndpointActivated
+    {
+        add { }
+        remove { }
+    }
+
     public List<AudioEndpoint> Endpoints { get; } = [];
 
     public DefaultEndpoints Defaults { get; set; }

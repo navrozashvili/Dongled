@@ -85,6 +85,13 @@ public sealed record StabilizationElapsed(DateTimeOffset Timestamp, string Sourc
 public sealed record StartupResolutionFinished(DateTimeOffset Timestamp) : EngineSignal(Timestamp);
 
 /// <summary>
+/// A Windows audio endpoint was added or became active, so a return that found nowhere to go may
+/// now have somewhere. Carries no endpoint: the consumer looks again at what is connected.
+/// </summary>
+/// <param name="Timestamp">When the notification arrived.</param>
+public sealed record EndpointBecameActive(DateTimeOffset Timestamp) : EngineSignal(Timestamp);
+
+/// <summary>
 /// Configuration changed on disk and the consumer should re-read it. Raised by the UI after it
 /// saves, since the UI is the only writer of that file.
 /// </summary>

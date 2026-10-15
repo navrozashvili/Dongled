@@ -26,21 +26,38 @@ internal sealed partial class EndpointNotificationClient : IMMNotificationClient
     private const int SOk = 0;
 
     private readonly Action<EDataFlow, ERole, string?> _onDefaultDeviceChanged;
+    private readonly Action<string?> _onDeviceActivated;
     private readonly ILogger _logger;
 
     internal EndpointNotificationClient(
         Action<EDataFlow, ERole, string?> onDefaultDeviceChanged,
+        Action<string?> onDeviceActivated,
         ILogger logger)
     {
         _onDefaultDeviceChanged = onDefaultDeviceChanged;
+        _onDeviceActivated = onDeviceActivated;
         _logger = logger;
     }
 
     /// <inheritdoc />
-    public int OnDeviceStateChanged(string? pwstrDeviceId, DeviceState dwNewState) => SOk;
+    public int OnDeviceStateChanged(string? pwstrDeviceId, DeviceState dwNewState)
+    {
+        // A Bluetooth speaker reconnecting arrives here, not as an addition: its endpoint already
+        // existed and only goes from unplugged to active.
+        if (dwNewState == DeviceState.Active)
+        {
+            ForwardActivated(pwstrDeviceId);
+        }
+
+        return SOk;
+    }
 
     /// <inheritdoc />
-    public int OnDeviceAdded(string? pwstrDeviceId) => SOk;
+    public int OnDeviceAdded(string? pwstrDeviceId)
+    {
+        ForwardActivated(pwstrDeviceId);
+        return SOk;
+    }
 
     /// <inheritdoc />
     public int OnDeviceRemoved(string? pwstrDeviceId) => SOk;
@@ -62,4 +79,16 @@ internal sealed partial class EndpointNotificationClient : IMMNotificationClient
 
     /// <inheritdoc />
     public int OnPropertyValueChanged(string? pwstrDeviceId, PropertyKey key) => SOk;
+
+    private void ForwardActivated(string? deviceId)
+    {
+        try
+        {
+            _onDeviceActivated(deviceId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Handling an endpoint activation notification threw.");
+        }
+    }
 }

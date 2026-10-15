@@ -46,3 +46,20 @@ public sealed class DefaultChangedEventArgs : EventArgs
     /// <summary>The endpoint that now holds the role, or null if none does.</summary>
     public string? EndpointId { get; }
 }
+
+/// <summary>An endpoint was added or became active, so it may now be somewhere to switch to.</summary>
+public sealed class EndpointActivatedEventArgs : EventArgs
+{
+    /// <param name="endpointId">The endpoint, or null if Windows did not say which.</param>
+    public EndpointActivatedEventArgs(string? endpointId)
+    {
+        EndpointId = endpointId;
+    }
+
+    /// <summary>The endpoint, or null if Windows did not say which.</summary>
+    /// <remarks>
+    /// Any data flow: Windows reports capture endpoints through the same callback, and telling them
+    /// apart would mean a COM call on the notification thread.
+    /// </remarks>
+    public string? EndpointId { get; }
+}

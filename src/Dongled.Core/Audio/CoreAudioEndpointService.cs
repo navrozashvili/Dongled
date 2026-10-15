@@ -36,7 +36,7 @@ public sealed class CoreAudioEndpointService : IAudioEndpointService, IDisposabl
     {
         ArgumentNullException.ThrowIfNull(logger);
         _logger = logger;
-        _notificationClient = new EndpointNotificationClient(OnDefaultDeviceChanged, logger);
+        _notificationClient = new EndpointNotificationClient(OnDefaultDeviceChanged, OnDeviceActivated, logger);
 
         // The registration outlives every operation, so this one enumerator is kept rather than
         // created per call: unregistering has to happen through a live object, and Windows keys
@@ -68,6 +68,9 @@ public sealed class CoreAudioEndpointService : IAudioEndpointService, IDisposabl
 
     /// <inheritdoc />
     public event EventHandler<DefaultChangedEventArgs>? DefaultChanged;
+
+    /// <inheritdoc />
+    public event EventHandler<EndpointActivatedEventArgs>? EndpointActivated;
 
     /// <inheritdoc />
     public IReadOnlyList<AudioEndpoint> Enumerate()
@@ -399,6 +402,9 @@ public sealed class CoreAudioEndpointService : IAudioEndpointService, IDisposabl
 
         return applied;
     }
+
+    private void OnDeviceActivated(string? endpointId) =>
+        EndpointActivated?.Invoke(this, new EndpointActivatedEventArgs(endpointId));
 
     private void OnDefaultDeviceChanged(EDataFlow flow, ERole role, string? endpointId)
     {

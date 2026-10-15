@@ -66,10 +66,15 @@ internal sealed class StartupReconciler
     /// Whether a source is already waiting out a stabilization delay, in which case its rules are
     /// left to the scheduler.
     /// </param>
+    /// <param name="waitingForDevice">
+    /// Told about each rule whose return found nowhere to go because the device is not connected
+    /// yet, so the engine can try again when it connects.
+    /// </param>
     internal void Reconcile(
         IReadOnlyList<Rule> rules,
         Func<string, Presence> presenceOf,
-        Func<string, bool> hasPendingReturn)
+        Func<string, bool> hasPendingReturn,
+        Action<Rule>? waitingForDevice = null)
     {
         ArgumentNullException.ThrowIfNull(rules);
         ArgumentNullException.ThrowIfNull(presenceOf);
@@ -86,7 +91,7 @@ internal sealed class StartupReconciler
 
             try
             {
-                ReconcileOne(rule, presenceOf(rule.Source.Id), hasPendingReturn);
+                ReconcileOne(rule, presenceOf(rule.Source.Id), hasPendingReturn, waitingForDevice);
             }
             catch (System.Runtime.InteropServices.COMException ex)
             {
@@ -121,7 +126,11 @@ internal sealed class StartupReconciler
         IReadOnlyList<AudioEndpoint> endpoints) =>
         RuleDevices.IsTarget(rule, Holder(defaults, role), endpoints);
 
-    private void ReconcileOne(Rule rule, Presence presence, Func<string, bool> hasPendingReturn)
+    private void ReconcileOne(
+        Rule rule,
+        Presence presence,
+        Func<string, bool> hasPendingReturn,
+        Action<Rule>? waitingForDevice)
     {
         var roles = rule.Target.Roles.Where(Enum.IsDefined).Distinct().ToArray();
         if (roles.Length == 0)
@@ -215,6 +224,9 @@ internal sealed class StartupReconciler
             return;
         }
 
-        _actions.ApplyDisconnect(rule);
+        if (_actions.ApplyDisconnect(rule) == ReturnOutcome.WaitingForDevice)
+        {
+            waitingForDevice?.Invoke(rule);
+        }
     }
 }

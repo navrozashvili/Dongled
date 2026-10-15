@@ -417,6 +417,106 @@ public class SwitchingEngineTests : IAsyncDisposable
         Assert.Empty(_endpoints.SetCalls);
     }
 
+    [Fact]
+    public async Task A_startup_return_to_a_device_that_is_not_connected_happens_once_it_connects()
+    {
+        // The reported case: Dongled starts while the speaker is still held by the other PC, so
+        // the return at startup finds nowhere to go. KVMate then connects the speaker, which only
+        // flips its existing endpoint to active.
+        var engine = await StartStuckOnTheHeadsetWithTheSpeakersAwayAsync();
+
+        Assert.Empty(_endpoints.SetCalls);
+
+        _endpoints.Activate("speakers");
+        await Settle(engine);
+
+        Assert.NotEmpty(_endpoints.SetCalls);
+        Assert.All(_endpoints.SetCalls, call => Assert.Equal("speakers", call.EndpointId));
+    }
+
+    [Fact]
+    public async Task A_disconnect_whose_fallback_is_not_connected_switches_to_it_once_it_connects()
+    {
+        _endpoints.Defaults = new DefaultEndpoints("headset", "headset");
+        MakeInactive("fallback");
+        var rule = RuleFor("headset-source", "headset", DisconnectMode.RestorePreviousElseFallback);
+        rule.OnDisconnect.FallbackNamePattern = "Fallback";
+        var engine = Start(rule);
+        var context = Context(engine);
+        context.ReportPresence("headset-source", Presence.Present);
+        await Settle(engine);
+
+        context.ReportPresence("headset-source", Presence.Absent);
+        await Settle(engine);
+        _time.Advance(TimeSpan.FromSeconds(5));
+        await Settle(engine);
+        Assert.DoesNotContain(_endpoints.SetCalls, call => call.EndpointId == "fallback");
+
+        _endpoints.Activate("fallback");
+        await Settle(engine);
+
+        Assert.Equal("fallback", _endpoints.SetCalls[^1].EndpointId);
+    }
+
+    [Fact]
+    public async Task A_waiting_return_is_dropped_when_the_source_reconnects_first()
+    {
+        var engine = await StartStuckOnTheHeadsetWithTheSpeakersAwayAsync();
+        Context(engine).ReportPresence("headset-source", Presence.Present);
+        await Settle(engine);
+        _endpoints.SetCalls.Clear();
+
+        _endpoints.Activate("speakers");
+        await Settle(engine);
+
+        Assert.Empty(_endpoints.SetCalls);
+    }
+
+    [Fact]
+    public async Task A_waiting_return_is_dropped_when_the_default_was_changed_by_hand()
+    {
+        var engine = await StartStuckOnTheHeadsetWithTheSpeakersAwayAsync();
+
+        // The user picked a device themselves while the return was waiting. Theirs wins.
+        _endpoints.Defaults = new DefaultEndpoints("mic-headset", "mic-headset");
+        _endpoints.Activate("speakers");
+        await Settle(engine);
+
+        Assert.Empty(_endpoints.SetCalls);
+    }
+
+    [Fact]
+    public async Task A_waiting_return_is_applied_once()
+    {
+        var engine = await StartStuckOnTheHeadsetWithTheSpeakersAwayAsync();
+        _endpoints.Activate("speakers");
+        await Settle(engine);
+
+        // Put back on the headset by hand, then something else connects.
+        _endpoints.Defaults = new DefaultEndpoints("headset", "headset");
+        _endpoints.SetCalls.Clear();
+        _endpoints.RaiseEndpointActivated("fallback");
+        await Settle(engine);
+
+        Assert.Empty(_endpoints.SetCalls);
+    }
+
+    [Fact]
+    public async Task A_waiting_return_keeps_waiting_when_some_other_device_connects()
+    {
+        var engine = await StartStuckOnTheHeadsetWithTheSpeakersAwayAsync();
+
+        _endpoints.RaiseEndpointActivated("mic-headset");
+        await Settle(engine);
+        Assert.Empty(_endpoints.SetCalls);
+
+        _endpoints.Activate("speakers");
+        await Settle(engine);
+
+        Assert.NotEmpty(_endpoints.SetCalls);
+        Assert.All(_endpoints.SetCalls, call => Assert.Equal("speakers", call.EndpointId));
+    }
+
     private static Rule RuleFor(
         string sourceId,
         string target,
@@ -444,6 +544,31 @@ public class SwitchingEngineTests : IAsyncDisposable
         _engine = new SwitchingEngine(_endpoints, _config, _state, _time, NullLoggerFactory.Instance);
         _running = _engine.RunAsync(TestContext.Current.CancellationToken);
         return _engine;
+    }
+
+    /// <summary>
+    /// Started with the headset switched off but still holding both roles, and its previous device,
+    /// the speakers, not connected: the return at startup has nowhere to go.
+    /// </summary>
+    private async Task<SwitchingEngine> StartStuckOnTheHeadsetWithTheSpeakersAwayAsync()
+    {
+        _endpoints.Defaults = new DefaultEndpoints("headset", "headset");
+        MakeInactive("speakers");
+        _state.Entries["headset-source"] = new PreviousDefault("speakers", "speakers", DateTimeOffset.UnixEpoch);
+        var engine = Start(RuleFor("headset-source", "headset"));
+
+        Context(engine).ReportPresence("headset-source", Presence.Absent);
+        await engine.StartupReconciliationCompleted.WaitAsync(
+            TimeSpan.FromSeconds(30),
+            TestContext.Current.CancellationToken);
+        await Settle(engine);
+        return engine;
+    }
+
+    private void MakeInactive(string id)
+    {
+        var index = _endpoints.Endpoints.FindIndex(endpoint => endpoint.Id == id);
+        _endpoints.Endpoints[index] = _endpoints.Endpoints[index] with { IsActive = false };
     }
 
     /// <summary>

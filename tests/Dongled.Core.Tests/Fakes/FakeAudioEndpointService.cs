@@ -36,6 +36,24 @@ public sealed class FakeAudioEndpointService : IAudioEndpointService
     /// <inheritdoc />
     public event EventHandler<DefaultChangedEventArgs>? DefaultChanged;
 
+    /// <inheritdoc />
+    public event EventHandler<EndpointActivatedEventArgs>? EndpointActivated;
+
+    /// <summary>
+    /// Mark an endpoint active and raise <see cref="EndpointActivated"/>, as Windows does when a
+    /// Bluetooth speaker reconnects to an endpoint that already existed.
+    /// </summary>
+    public void Activate(string id)
+    {
+        var index = Endpoints.FindIndex(endpoint => Same(endpoint.Id, id));
+        Endpoints[index] = Endpoints[index] with { IsActive = true };
+        RaiseEndpointActivated(id);
+    }
+
+    /// <summary>Raise <see cref="EndpointActivated"/> without changing any endpoint.</summary>
+    public void RaiseEndpointActivated(string id) =>
+        EndpointActivated?.Invoke(this, new EndpointActivatedEventArgs(id));
+
     /// <summary>Add an active endpoint.</summary>
     public void AddActive(string id, string displayName) =>
         Endpoints.Add(new AudioEndpoint(id, displayName, IsActive: true, false, false));
